@@ -1,0 +1,391 @@
+== Audr32 ==
+
+- Little-endian data format.
+- 32-bit data width.
+- 256 Memory Mapped I/O ports. (although there may be less ports depending on the implementation of the CPU)
+- Limited instruction set. (only 16 opcodes, extra functionality added via assembler macro system)
+- Variable length instruction encoding for best usage of memory space.
+- CISC architecture design with RISC elements and inspirations.
+
+=== Pointer structure ===
+
+Mode is a 4-bit integer from 0x0-0xF that describes the mode of operation for the pointer.
+
+- 0x0 8-bit
+- 0x1 16-bit
+- 0x2 32-bit
+- 0x3 8-bit (register)
+- 0x4 16-bit (register)
+- 0x5 32-bit (register)
+
+The 4th to 8th bits will only be utilised in the event that a pointer references a register, otherwise it will remains empty.
+
+A better method of compression could be used to reduce the size of a pointer further, which would in turn massively decrease the fixed instruction length.
+
+0        4        8        12       16       20        24       28       32        36       40        44       48       52        56
++--------+--------+-------------------------------------------------------------------------+-------------------------------------+
+| mode   | reg    | 32-bit address                                                          | signed 16-bit offset                |
++--------+--------+-------------------------------------------------------------------------+-------------------------------------+
+
+=== Instruction Prefix ===
+
+Instructions are between 1 and 12 bytes in length and may use a few different addressing modes. 
+
+Opcode and mode share the first byte of the instruction as they both take up a mere 4 bits.
+
+Instruction Prefix:
+|<===============>|
+0        4        8
++--------+--------+
+| opcode | mode   |
++--------+--------+
+
+=== Instructions ===
+
+Audr32 takes inspiration from the simplicity of RISC architecture designs whilst still using a CISC-oriented ISA.
+Whilst in a RISC, instructions are laid out in a load-store structure, in Audr32 it's not limited by this. Only certain instructions will access memory directly, but aside from that other instructions may be reg/reg or reg/imm.
+Due to the nature of Audr32's small instruction set, only the bare functionality is exposed in opcode form. This is counteracted by a macro system within the assembler that is used to implement all other instructions that would normally exist within a CISC architecture, this sort of way of implementing the ISA is very close to a RISC system.
+
+The implementation for ALU instructions is intentionally as minimal as possible, only including the bare minimum required to create the full functionality. One of the downsides to utilising this method means that more instructions are required to perform the same task a fully fleshed out system would take.
+
+  mode:argformat
+- 0x0 ptr, imm
+- 0x1 ptr, reg
+- 0x2 reg, imm
+- 0x3 reg, ptr
+- 0x4 reg, reg
+- 0x5 imm, imm
+- 0x6 imm
+
+  opcode:mode mnemonic args -> psuedocode
+- 0x0:0 MOV ptr0, imm0 -> [ptr0] = imm0
+- 0x0:1 MOV ptr0, reg0 -> [ptr0] = reg0
+- 0x0:2 MOV reg0, imm0 -> reg0 = imm0
+- 0x0:3 MOV reg0, ptr0 -> reg0 = [ptr0]
+- 0x0:4 MOV reg0, reg1 -> reg0 = reg1
+- 0x1:2 ADD reg0, imm0 -> reg0 = reg0 + imm0
+- 0x1:4 ADD reg0, reg1 -> reg0 = reg0 + reg1
+- 0x2:2 ADC reg0, imm0 -> reg0 = reg0 + imm0 + CF
+- 0x2:4 ADC reg0, reg1 -> reg0 = reg0 + reg1 + CF
+- 0x3:2 SUB reg0, imm0 -> reg0 = reg0 - imm0
+- 0x3:4 SUB reg0, reg1 -> reg0 = reg0 - reg1
+- 0x4:2 SBB reg0, imm0 -> reg0 = reg0 - (imm0 + CF)
+- 0x4:4 SBB reg0, reg1 -> reg0 = reg0 - (reg1 + CF)
+- 0x5:2 AND reg0, imm0 -> reg0 = reg0 & imm0
+- 0x5:4 AND reg0, reg1 -> reg0 = reg0 & reg1
+- 0x6:2 OR reg0, imm0 -> reg0 = reg0 | imm0
+- 0x6:4 OR reg0, reg1 -> reg0 = reg0 | reg1
+- 0x7:2 NOR reg0, imm0 -> reg0 = ~(reg0 | imm0)
+- 0x7:4 NOR reg0, reg1 -> reg0 = ~(reg0 | reg1)
+- 0x8:2 SHL reg0, imm0 -> reg0 = reg0 << imm0
+- 0x8:4 SHL reg0, reg1 -> reg0 = reg0 << reg1
+- 0x9:2 SHR reg0, imm0 -> reg0 = reg0 >> imm0
+- 0x9:4 SHR reg0, reg1 -> reg0 = reg0 >> reg1
+- 0xA:2 CMP reg0, imm0 -> CF = reg0 > imm0 ? 1 : 0; ZF = reg0 == imm0 ? 1 : 0
+- 0xA:5 CMP imm0, imm1 -> CF = imm0 > imm1 ? 1 : 0; ZF = imm0 == imm1 ? 1 : 0
+- 0xA:4 CMP reg0, reg1 -> CF = reg0 > reg1 ? 1 : 0; ZF = reg0 == reg1 ? 1 : 0
+- 0xB:6 JNZ imm0 -> ZF == 0 ? r6 = imm0
+- 0xC:3 LEA reg0, ptr0 -> reg0 = ptr0
+- 0xD:6 INT imm0 -> int(imm0)
+
+=== Assembler Macro Instructions ===
+
+  mnemonic args -> pseudocode
+- HLT -> byte [0x8]:6 = 1
+- PUSH reg0 -> dword [r5 -= 4] = reg0
+- POP reg0 -> reg0 = dword [r5 + 4]
+- CALL imm0 -> dword [r5 -= 4] = r6; r6 = imm0
+- RET -> r6 = dword [r5 + 4]
+- INB imm0, imm1 -> reg0 = byte [imm0]
+- INW imm0, imm1 -> reg0 = word [imm0]
+- IND imm0, imm1 -> reg0 = dword [imm0]
+- OUTB imm0, imm1 -> byte [imm0] = imm1
+- OUTW imm0, imm1 -> word [imm0] = imm1
+- OUTD imm0, imm1 -> dword [imm0] = imm1
+- INC reg0 -> reg0++
+- DEC reg0 -> reg0--
+- MUL reg0, reg1 -> reg0 = reg0 * reg1
+- DIV reg0, reg1 -> reg0 = reg0 / reg1
+- NEG reg0 -> reg0 = 0 - reg0
+- NOT reg0 -> reg = ~(reg0 | reg0)
+- NAND reg0, reg1 -> reg = ~(reg0 & reg1)
+- XOR reg0, reg1 -> ~(reg0 & reg1) & (reg1 | reg0)
+- JMP imm0 -> r6 = imm0
+- JZ imm0 -> ZF == 1 ? r6 = imm0
+- JNC imm0 -> CF == 0 ? r6 = imm0
+- JNCZ imm0 -> ZF == 1 ? r6 = imm0 : CF == 0 ? r6 = imm0
+- JC imm0 -> CF == 1 ? r6 = imm0
+- JCZ imm0 -> ZF == 1 ? r6 = imm0 : CF == 1 ? r6 = imm0
+
+
+=== Assembler Macro Definitions ===
+
+.macro HLT ; halt CPU until interrupt is triggered (or indefinitely if interrupts are disabled)
+    mov r7, [byte:0x8] ; do not save r7 beforehand because it's physically impossible to restore
+    push r8 ; save r8 as it's not usually assembler reserved
+    mov r8, -1 ; value
+    xor r8, r7 ; (value ^ flags)
+    and r8, 64 ; & (0x1 << 6)
+    xor r7, r8 ; flags ^ ...
+    pop r8
+    mov [byte:0x8], r7 ; flags = ... we can't actually restore r7 here because of reasons
+
+.macro PUSH %r0 ; push to stack
+    sub r5, 4 ; decrement by size operand
+    mov [dword:r5], %r0
+
+.macro POP %r0 ; pop from stack
+    mov %r0, [dword:r5]
+    add r5, 4
+
+.macro CALL %i0 ; call subroutine (save ip, unconditional jump)
+    push r6 ; save ip
+    jmp %i0 ; jump to subroutine
+
+.macro RET ; return from subroutine (restore ip, no need to jump as next opcode read will begin at the new location)
+    pop r6 ; restore ip
+
+.macro INB %i0, %r0 ; pull data from I/O port (wrapper around memory mapped I/O)
+    mov %r0, [byte:%i0]
+
+.macro INW %i0, %r0 ; pull data from I/O port (wrapper around memory mapped I/O)
+    mov %r0, [word:%i0]
+
+.macro IND %i0, %r0 ; pull data from I/O port (wrapper around memory mapped I/O)
+    mov %r0, [dword:%i0]
+
+.macro OUTB %i0, %r1 ; output data to I/O port
+    mov [byte:%i0], %r1
+
+.macro OUTW %i0, %r1 ; output data to I/O port
+    mov [word:%i0], %r1
+
+.macro OUTD %i0, %r1 ; output data to I/O port
+    mov [dword:%i0], %r1
+
+.macro INC %r0 ; increment by 1 for lazy people
+    add %r0, 1
+
+.macro DEC %r0 ; decrement by 1 for lazy people
+    sub %r0, 1
+
+.macro MUL %r0, %r1 ; multiply operands
+    mov r7, %r1
+    mulloop:
+        cmp r7, 0
+        jz mulend
+        add %r0, %r0
+        dec r7
+        jmp mulloop
+    mulend:
+
+.macro DIV %r0, %r1 ; divide operands
+    ; TODO: Proper integer division
+
+.macro NEG %r0 ; negate operand
+    mov r7, 0 ; we want to subtract from zero
+    sub r7, %r0 ; subtract %r0 from zero
+    mov %r0, r7 ; move result into operand
+
+.macro NOT %r0 ; bitwise NOT
+    nor %r0, %r0 ; bitwise is just NOR of itself
+
+.macro NAND %r0, %r1 ; bitwise NAND
+    and %r0, %r1
+    not %r0
+
+.macro XOR %r0, %r1 ; bitwise XOR
+    mov r7, %r1
+    or r7, %r0
+    nand %r0, %r1
+    and %r0, r7 
+
+.macro JMP %i0 ; unconditional jump
+    mov r6, %i0 ; we can just set the instruction pointer
+
+.macro JZ %i0 ; jump if zero
+    mov r7, [byte:0x8]
+    shr r7, 0x0 ; zero flag
+    and r7, 0x1 ; get raw result
+    cmp r7, 0 ; check if is disabled
+    jnz %i0 ; jump to location since if originally ZF is set, it should now not be (hacky workaround for a proper NOT instruction/macro)
+
+.macro JNC %i0 ; jump if not carry (jl)
+    mov r7, [byte:0x8]
+    shr r7, 0x1 ; carry flag
+    and r7, 0x1 ; get raw result
+    cmp r7, 0 ; check if disabled
+    jz %i0 ; jump to location since if CF is not set as that signifies <
+
+.macro JNCZ %i0 ; jump if not carry or if zero (jle)
+    jz %i0 ; initially check if equal
+    jnc %i0 ; if equal check fails, we fallback to checking for <
+
+.macro JC %i0 ; jump if carry (jg)
+    mov r7, [byte:0x8]
+    shr r7, 0x1 ; carry flag
+    and r7, 0x1 ; get raw result
+    cmp r7, 1 ; check if enabled
+    jz %i0 ; jump to location if CF is set as that signifies >
+
+.macro JCZ %i0 ; jump if carry or zero (jge)
+    jz %i0 ; initially check if equal
+    jc %i0 ; if equal check fails, we fallback to checking for >
+
+
+=== Control Registers ===
+
+Control registers in Audr32 are memory mapped to certain locations within memory, the allocated range for all control registers is between 0x0 and 0x40.
+Memory read and writes to this address space will only affect control registers on a per-CPU basis, meaning they will act identical to standard registers on a multi-core setup.
+- 0x0...0x4 Page table address. (32-bit)
+- 0x4...0x8 Interrupt table address. (32-bit)
+- 0x8...0x9 Flags. (bit 0 = Zero, bit 1 = Carry, bit 2 = Overflow, bit 3 = Sign, bit 4 = Interrupts, bit 5 = Context, bit 6 = Halt)
+- 0x9...0xA Exception error code.
+
+=== Generic Registers ===
+
+Register encoding is represented by a 4-bit integer as all registers remain within 0x0-0xF, consisting of seven special case registers and nine general purpose registers.
+Every register is CPU specific so multiple cores will each have their own set of registers.
+
+- R0, AC (Accumalator, safe to overwrite usually)
+- R1, BS (Base, safe to overwrite usually)
+- R2, CR (Counter, safe to overwrite usually)
+- R3, DA (Data, safe to overwrite usually)
+- R4, BP (Base pointer, used when swapping SP for local variables in high-level code)
+- R5, SP (Stack pointer, can be modified so the stack will point to a different memory address)
+- R6, IP (Instruction pointer, points to the memory address of the current instruction)
+- R7, (General purpose, assembler usually overwrites during certain instruction macros)
+- R8 (General purpose, HLT instruction macro overwrites however, we do actually save this one as it's not assembly "reserved")
+- R9 (General purpose)
+- R10 (General purpose)
+- R11 (General purpose)
+- R12 (General purpose)
+- R13 (General purpose)
+- R14 (General purpose)
+- R15 (General purpose)
+
+=== Interrupts ===
+
+Interrupts in Audr32 are relatively simple and follow a similar design to some more commericalised CISCs such as x86, with a static table describing interrupt handlers. Interrupts can be called with the dedicated `int` instruction.
+
+=== Interrupt Table Structure ===
+
+For interrupts to function correctly, the interrupt table control register (32-bit address located at 0x4) must be set to a location in memory where a predefined interrupt table header is present, the following data (dictated by the length described in the interrupt header) will contain the information needed to setup handlers for individual interrupt numbers. When an interrupt table is setup that diverges from the one contained within the BIOS, all BIOS interrupts will no longer be accessible without somehow switching back to the BIOS interrupt table located in ROM.
+Due to how control registers are designed, a system could in theory use different interrupt tables for every CPU for some monstrosity of a system. An interrupt table must contain 32 entries containing a single 32-bit absolute address to every single handler (the first entry will contain the exception handler).
+
+=== Exceptions ===
+
+When a CPU exception occurs for whatever reason, interrupt 0 will be triggered and the appropriate handler will be called. Here the BIOS or supervisor may choose how to proceed, the error code will be accessible in an 8-bit control register located at 0x9.
+
+=== Paging ===
+
+Paging in Audr32 is used to map memory addresses in a virtual memory context to physical addresses on RAM or on a disk. Paging may be also used to extend usable memory outside of the 4GB limit from 32-bit address spaces. Page tables are set per-CPU with a control register at 0x0 and can be swapped out for task switching on a multi-tasking/multi-threaded kernel.
+
+=== Memory Map (Builtin) ===
+
+The base memory map (without anything high-level set up) is incredibly minimal, only covering the essentials for the function of the system like control registers, I/O and ROM.
+
+- 0x0...0x40 Control Registers.
+- 0x40...0x440 Memory Mapped I/O. (Not all memory addresses are used for flexibility)
+- 0x440...0x80440 ROM.
+- 0x80440...0xffffffff RAM.
+
+=== Standard Memory Maps (BIOS Standard) ===
+
+The standard BIOS setup for an Audr32 computer system will allocate its own Memory Map in accordance with a standardised memory map, all other unmapped memory (>1.4MB (>0x162440)) can be considered free reign for whatever may run on top of the CPU.
+All this memory is mapped directly into RAM as all of it is data the BIOS needs to copy to a controller, or dump from a controller.
+
+- 0x80440...0x300440 BIOS allocated framebuffer space. (2.5MB, can be used for various different display technologies depending on system requirements)
+- 0x300440...0x300640 BIOS allocated disk cache. (read/write buffer for disk I/O, where the BIOS will dump disk reads and copy data for writes)
+- 0x300640...0x301640 BIOS NVRAM cache. (persisting data such as BIOS settings, acts the same as BIOS disk cache, however, in NVRAM the entirety of the NVRAM is dumped into the cache and written when the BIOS wishes to. Since NVRAM is dumped in its entirety, there is no need to do any disk reads more than once initially at boot as the cache will suffice)
+- 0x301640...0xffffffff Usable unmapped memory.
+
+=== NVRAM ===
+
+- 4KB of NVRAM is available at maximum. (as memory mapped by the BIOS)
+- Stored in Non-Volatile flash RAM memory.
+- Useful for BIOS settings and whatever else may be used without intruding on actual RAM.
+
+=== BIOS Services ===
+
+The audr32 emulator ships with a copy of a dedicated BIOS that provides basic functionality such as setting up the display and booting into a sector marked as bootable (last two bytes of 512 byte sector, 0x5B4A).
+
+The sector loaded by the BIOS is expected to handle operations post-boot, however the BIOS will remain loaded in ROM to receive service interrupts. All code must be contained within this 512 byte sector, however, the loaded code may request the BIOS to load more sectors into memory for a second stage bootloader or third stage depending on the complexity of the bootloader.
+
+- Initial setup of a basic text mode display (mapped to an arbitrary memory location)
+- Ability to setup further display modes
+- Provide basic text mode display functionality (printing characters, moving a cursor, clearing a screen, etc.)
+- Provide abstraction over disk read/writes (SPI, UART, etc.)
+- Load initial bootable sector from disk or die (halt and catch fire)
+- Query for more sectors/disks
+- Load more sectors
+- Provide a memory map in the event virtual contexts may be used
+- Provide information about multiple CPU cores (in the case they exist)
+
+=== Multi-Processing ===
+
+Audr32 will be considered in a multi-core processing mode (a bit like x86's SMP), these will be implemented in the emulator with seperate threads. All CPUs are equipped with their own set of registers (along with control registers). The individual cores must be bootstrapped accordingly.
+
+
+== Hardware Implementation ==
+
+Audr32 will be implemented in hardware with an FPGA (or multiple FPGAs) that will be programmed to follow the specifications laid down by the ISA using a language such as VHDL.
+
+Some interesting potential FPGAs include the AMD Xilinx Spartan 7 series of FPGAs that can be found included with a development board.
+
+- https://digilent.com/shop/arty-s7-spartan-7-fpga-development-board/
+
+
+== Assembly ==
+
+Audr32's assembler supports a simple assembly language that can target different executable formats.
+
+=== Instruction Format ===
+
+The standard instruction format is as follows `<instruction> <dest>, <src>`. An instruction may have at maximum two arguments and at minimum none.
+
+=== Pointers ===
+
+Pointers may be referenced using double square brackets as follows: `[<addr>]`, a mode of reference may be applied my preceeding the address reference with a size keyword such as `byte`, `word` and `dword`. (`[word:0xFFFF]`), an offset can optionally be applied by adding an offset after the address (eg. `[0xFFFF:-1]`) an offset may be a positive or negative number, and also may be an arithmetic expression (much like the reference address).
+
+=== Directives ===
+
+- `.macro INST args...` (Declare macro)
+- `.db <data>` (Declare byte)
+- `.dw <data>` (Declare word)
+- `.dd <data>` (Declare double word)
+- `.daz "<data>"` (Declare null terminated ascii string)
+- `.danz "<data>"` (Declare non null terminated ascii string)
+
+
+== Executable Code ==
+
+It would be interesting to trial generating ELF files for audr32, in the event this proves too difficult to implement a simplified, albiet similar, approach will be taken.
+
+=== AEF (Adaptable Executable Format) ===
+
+Survivable executable format that provides the same facilities as ELF with a more simplified direct approach. AEF requires the host CPU implements some form of virtual/physical mapping to function as intended, if the host CPU does not support paging (or other forms of virtual mapping) AEF should be replaced by a raw binary format.
+
+=== AEF Header ===
+
+AEF supports a maximum executable size of 4GB due to the choice of utilising 32-bit virtual < 4GB mapped memory.
+
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 0-32    | Magic Identifier (0x4145463f, 'AEF?')                                                                                            |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 32-40   | Bits (0 = 32-bit (default), 1 = 64-bit)                                                                                          |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 40-72   | 32-bit Entry address (Virtual address)                                                                                           |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 72-136  | 64-bit Requested physical loading address (for non-relocatable executables, this is allowed to be 0 for relocatable executables) |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 136-168 | 32-bit Text offset                                                                                                               |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 168-200 | 32-bit Data offset                                                                                                               |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| Bit 200-232 | 32-bit Text size                                                                                                                 |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+| bit 232-264 | 32-bit Data size                                                                                                                 |
++-------------+----------------------------------------------------------------------------------------------------------------------------------+
+
+

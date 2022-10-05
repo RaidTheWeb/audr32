@@ -1,0 +1,12 @@
+== Kernel Design ==
+
+General ideas for an optimal Operating System kernel, mainly focusing on Audr32 but also can be applied to existing CPU architectures like x86.
+For an optimally designed kernel to make efficient use of the resources provided by a computer running the Audr32 architecture it requires support for a few key features.
+
+=== Syscalls ===
+
+In a high-level kernel that supports userspace contexts for programs, the issue of passing information and requests from a user executable to the kernel arises. Audr32 in contrast to some other CISC systems like x86(_64 AMD \w Intel compat), does not support any form of dedicated syscall instruction. A lot like Linux for x86 (which does not support syscalls in 32-bit with both AMD and Intel compat ), the kernel will have to make use of a specialised interrupt to trigger a syscall.
+
+=== Multi-Tasking ===
+
+In an ideal environment, where the Audr32 system is use in tandem with a sufficiently advanced Operating System kernel, user programs should be scheduled to be swapped in and out of execution at distinct time intervals (time slices) for maximum efficiency. Using multi-processing every CPU can perform its scheduling in parallel leading to greatly increased task efficiency. The CPUs current state should be saved before spinning up the next task, so that when it is resumed no data is lost. Initial state information could be gained from the reschedule interval being associated with a struct containing a representation of the current CPU state. When a new task thread is created, its state is initialised with information such as the instruction pointer where it will be pointed to start a task, an argument for threads and often a dedicated stack allocation so it will not interfere with the stack of other threads or the kernel. When a task is swapped the current control registers must also be saved so that things such as the page table address ca be preserved for context isolation in relation to program memory.
