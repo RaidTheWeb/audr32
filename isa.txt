@@ -2,8 +2,9 @@
 
 - Little-endian data format.
 - 32-bit data width.
-- 256 Memory Mapped I/O ports. (although there may be less ports depending on the implementation of the CPU)
-- Limited instruction set. (only 16 opcodes, extra functionality added via assembler macro system)
+- 32-bit registers.
+- 1024 (Variably utilised) Memory Mapped I/O ports. (although there may be less ports depending on the implementation of the CPU)
+- Limited instruction set. (only 16 possible opcodes, extra functionality added via assembler macro system)
 - Variable length instruction encoding for best usage of memory space.
 - CISC architecture design with RISC elements and inspirations.
 
@@ -241,6 +242,7 @@ Memory read and writes to this address space will only affect control registers 
 - 0x4...0x8 Interrupt table address. (32-bit)
 - 0x8...0x9 Flags. (bit 0 = Zero, bit 1 = Carry, bit 2 = Overflow, bit 3 = Sign, bit 4 = Interrupts, bit 5 = Context, bit 6 = Halt)
 - 0x9...0xA Exception error code.
+- 0xA...0xB Bootstrapped (Active)
 
 === Generic Registers ===
 
@@ -268,6 +270,8 @@ Every register is CPU specific so multiple cores will each have their own set of
 
 Interrupts in Audr32 are relatively simple and follow a similar design to some more commericalised CISCs such as x86, with a static table describing interrupt handlers. Interrupts can be called with the dedicated `int` instruction.
 
+Interrupt triggers should always save registers before launching into code for safe practise, for high-level interrupt handlers, bootstrapping code should be put into place that will handle saving and restoring register states.
+
 === Interrupt Table Structure ===
 
 For interrupts to function correctly, the interrupt table control register (32-bit address located at 0x4) must be set to a location in memory where a predefined interrupt table header is present, the following data (dictated by the length described in the interrupt header) will contain the information needed to setup handlers for individual interrupt numbers. When an interrupt table is setup that diverges from the one contained within the BIOS, all BIOS interrupts will no longer be accessible without somehow switching back to the BIOS interrupt table located in ROM.
@@ -292,7 +296,7 @@ The base memory map (without anything high-level set up) is incredibly minimal, 
 
 === Standard Memory Maps (BIOS Standard) ===
 
-The standard BIOS setup for an Audr32 computer system will allocate its own Memory Map in accordance with a standardised memory map, all other unmapped memory (>1.4MB (>0x162440)) can be considered free reign for whatever may run on top of the CPU.
+The standard BIOS setup for an Audr32 computer system will allocate its own Memory Map in accordance with a standardised memory map, all other unmapped memory (>3.1MB (>0x301640)) can be considered free reign for whatever may run on top of the CPU.
 All this memory is mapped directly into RAM as all of it is data the BIOS needs to copy to a controller, or dump from a controller.
 
 - 0x80440...0x300440 BIOS allocated framebuffer space. (2.5MB, can be used for various different display technologies depending on system requirements)

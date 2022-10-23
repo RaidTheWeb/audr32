@@ -2,89 +2,24 @@
 
 #include "disasm.h"
 
-void printregstd(uint8_t reg) {
-    switch(reg) {
-        case REG_R0:
-            printf("r0");
-            break;
-        case REG_R1:
-            printf("r1");
-            break;
-        case REG_R2:
-            printf("r2");
-            break;
-        case REG_R3:
-            printf("r3");
-            break;
-        case REG_R4:
-            printf("r4");
-            break;
-        case REG_R5:
-            printf("r5");
-            break;
-        case REG_R6:
-            printf("r6");
-            break;
-        case REG_R7:
-            printf("r7");
-            break;
-        case REG_R8:
-            printf("r8");
-            break;
-        case REG_R9:
-            printf("r9");
-            break;
-        case REG_R10:
-            printf("r10");
-            break;
-        case REG_R11:
-            printf("r11");
-            break;
-        case REG_R12:
-            printf("r12");
-            break;
-        case REG_R13:
-            printf("r13");
-            break;
-        case REG_R14:
-            printf("r14");
-            break;
-        case REG_R15:
-            printf("r15");
-            break;
-    }
-}
-
 void printpointer(disasmstate_t *state) {
     uint8_t data = *((uint8_t *)(state->program + (state->ip++)));
     uint32_t addr = *((uint32_t *)(state->program + ((state->ip += 4) - 4)));
     int16_t offset = *((int16_t *)(state->program + ((state->ip += 2) - 2)));
     switch((data & 0xF0) >> 4) {
         case PTR_8BIT:
-        case PTR_8BITREG:
-            printf("[byte:");
-            break;
+        case PTR_8BITREG: printf("[byte:"); break;
         case PTR_16BIT:
-        case PTR_16BITREG:
-            printf("[word:");
-            break;
+        case PTR_16BITREG: printf("[word:"); break;
         case PTR_32BIT:
-        case PTR_32BITREG:
-            printf("[dword:");
-            break;
+        case PTR_32BITREG: printf("[dword:"); break;
     }
 
-    if((data & 0xF0) >> 4) {
-        printregstd(data & 0x0F);
-    } else {
-        printf("0x%08x", addr);
-    }
+    if((data & 0xF0) >> 4) printf("%s", REG_NAMES[data & 0x0F]);
+    else printf("0x%08x", addr);
 
-    if(offset != 0) {
-        printf(":%d]", offset);
-    } else {
-        printf("]");
-    }
+    if(offset != 0) printf(":%d]", offset);
+    else printf("]");
 }
 
 void printimm(disasmstate_t *state) {
@@ -94,56 +29,7 @@ void printimm(disasmstate_t *state) {
 
 void printreg(disasmstate_t *state) {
     uint8_t reg = *((uint8_t *)(state->program + (state->ip++)));
-    switch(reg) {
-        case REG_R0:
-            printf("r0");
-            break;
-        case REG_R1:
-            printf("r1");
-            break;
-        case REG_R2:
-            printf("r2");
-            break;
-        case REG_R3:
-            printf("r3");
-            break;
-        case REG_R4:
-            printf("r4");
-            break;
-        case REG_R5:
-            printf("r5");
-            break;
-        case REG_R6:
-            printf("r6");
-            break;
-        case REG_R7:
-            printf("r7");
-            break;
-        case REG_R8:
-            printf("r8");
-            break;
-        case REG_R9:
-            printf("r9");
-            break;
-        case REG_R10:
-            printf("r10");
-            break;
-        case REG_R11:
-            printf("r11");
-            break;
-        case REG_R12:
-            printf("r12");
-            break;
-        case REG_R13:
-            printf("r13");
-            break;
-        case REG_R14:
-            printf("r14");
-            break;
-        case REG_R15:
-            printf("r15");
-            break;
-    }
+    printf("%s", REG_NAMES[reg]); 
 }
 
 int main(int argc, char **argv) {
@@ -166,54 +52,12 @@ int main(int argc, char **argv) {
 
     state.program = (uint8_t *)malloc(size);
     fread(state.program, size, 1, f);
+    fclose(f);
 
     while(state.ip < size) {
         printf("0x%08x: ", state.ip);
         uint8_t opdata = *((uint8_t *)(state.program + (state.ip++)));
-        switch((opdata & 0xF0) >> 4) {
-            case OP_MOV:
-                printf("mov ");
-                break;
-            case OP_ADD:
-                printf("add ");
-                break;
-            case OP_ADC:
-                printf("adc ");
-                break;
-            case OP_SUB:
-                printf("sub ");
-                break;
-            case OP_SBB:
-                printf("sbb ");
-                break;
-            case OP_AND:
-                printf("and ");
-                break;
-            case OP_OR:
-                printf("or ");
-                break;
-            case OP_NOR:
-                printf("nor ");
-                break;
-            case OP_SHL:
-                printf("shl ");
-                break;
-            case OP_SHR:
-                printf("shr ");
-                break;
-            case OP_CMP:
-                printf("cmp ");
-                break;
-            case OP_JNZ:
-                printf("jnz ");
-                break;
-            case OP_LEA:
-                printf("lea ");
-                break;
-            case OP_INT:
-                printf("int ");
-                break;
-        }
+        printf("%s ", OP_NAMES[(opdata & 0xF0) >> 4]); 
 
         switch(opdata & 0x0F) {
             case MODE_PTRIMM:
